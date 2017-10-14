@@ -45,6 +45,12 @@ public enum  Preference {
     PRIMARY("_primary"),
 
     /**
+     * Route to local primary shards
+     * wsh added
+     * */
+    LOCAL_PRIMARY("_local_primary"),
+
+    /**
      * Route to replica shards
      */
     REPLICA("_replica"),
@@ -99,6 +105,8 @@ public enum  Preference {
                 return LOCAL;
             case "_primary":
                 return PRIMARY;
+            case "_local_primary":
+                return LOCAL_PRIMARY;
             case "_replica":
                 return REPLICA;
             case "_primary_first":

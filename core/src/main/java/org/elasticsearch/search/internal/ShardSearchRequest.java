@@ -32,6 +32,7 @@ import org.elasticsearch.index.query.QueryShardContext;
 import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.indices.AliasFilterParsingException;
 import org.elasticsearch.indices.InvalidAliasNameException;
+import org.elasticsearch.search.RelSearchParam;
 import org.elasticsearch.search.Scroll;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 
@@ -67,6 +68,8 @@ public interface ShardSearchRequest {
     Boolean requestCache();
 
     Scroll scroll();
+
+    RelSearchParam relSearchParam();
 
     /**
      * Sets if this shard search needs to be profiled or not

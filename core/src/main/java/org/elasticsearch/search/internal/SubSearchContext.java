@@ -22,6 +22,7 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.util.Counter;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.index.query.ParsedQuery;
+import org.elasticsearch.search.RelSearchParam;
 import org.elasticsearch.search.aggregations.SearchContextAggregations;
 import org.elasticsearch.search.collapse.CollapseContext;
 import org.elasticsearch.search.fetch.FetchSearchResult;
@@ -75,6 +76,14 @@ public class SubSearchContext extends FilteredSearchContext {
     @Override
     protected void doClose() {
     }
+
+    @Override
+    public SearchContext relSearchParam(RelSearchParam relSearchParam) {
+        return this;
+    }
+
+    @Override
+    public RelSearchParam relSearchParam() { return null; }
 
     @Override
     public void preProcess(boolean rewrite) {

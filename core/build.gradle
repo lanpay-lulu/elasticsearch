@@ -38,6 +38,12 @@ archivesBaseName = 'elasticsearch'
 
 dependencies {
 
+  // https://mvnrepository.com/artifact/org.apache.thrift/libthrift
+  //compile group: 'org.apache.thrift', name: 'libthrift', version: '0.10.0', ext: 'pom'
+  compile "org.apache.thrift:libthrift:0.10.0"
+  //testCompile group: 'org.slf4j', name: 'slf4j-simple', version: '1.7.25'
+  compile "org.slf4j:slf4j-api:1.6.2"
+
   // lucene
   compile "org.apache.lucene:lucene-core:${versions.lucene}"
   compile "org.apache.lucene:lucene-analyzers-common:${versions.lucene}"

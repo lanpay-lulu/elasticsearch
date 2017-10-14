@@ -30,6 +30,7 @@ import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.ToXContent;
+import org.elasticsearch.search.RelSearchParam;
 import org.elasticsearch.search.Scroll;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.tasks.Task;
@@ -78,6 +79,21 @@ public final class SearchRequest extends ActionRequest implements IndicesRequest
     public static final IndicesOptions DEFAULT_INDICES_OPTIONS = IndicesOptions.strictExpandOpenAndForbidClosed();
 
     private IndicesOptions indicesOptions = DEFAULT_INDICES_OPTIONS;
+
+    /**
+     * for relation search
+     * */
+    private RelSearchParam relSearchParam;
+
+    public RelSearchParam relSearchParam() {
+        return relSearchParam;
+    }
+
+    public SearchRequest relSearchParam(RelSearchParam relSearchParam) {
+        this.relSearchParam = relSearchParam;
+        return this;
+    }
+
 
     public SearchRequest() {
     }
@@ -404,6 +420,7 @@ public final class SearchRequest extends ActionRequest implements IndicesRequest
                 ", preference='" + preference + '\'' +
                 ", requestCache=" + requestCache +
                 ", scroll=" + scroll +
+                ", relSearchParam=" + relSearchParam +
                 ", source=" + source + '}';
     }
 }

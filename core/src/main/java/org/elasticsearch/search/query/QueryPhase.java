@@ -19,6 +19,7 @@
 
 package org.elasticsearch.search.query;
 
+import org.apache.log4j.Logger;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queries.MinDocQuery;
@@ -43,10 +44,21 @@ import org.apache.lucene.search.TotalHitCountCollector;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.search.grouping.CollapsingTopDocsCollector;
 import org.elasticsearch.action.search.SearchType;
+import org.elasticsearch.client.transport.TransportClient;
+import org.elasticsearch.cluster.ClusterModule;
+import org.elasticsearch.cluster.ClusterState;
+import org.elasticsearch.cluster.routing.IndexRoutingTable;
+import org.elasticsearch.cluster.routing.IndexShardRoutingTable;
+import org.elasticsearch.cluster.routing.RoutingTable;
+import org.elasticsearch.cluster.routing.ShardRouting;
+import org.elasticsearch.cluster.service.ClusterService;
+import org.elasticsearch.common.inject.Injector;
 import org.elasticsearch.common.lucene.Lucene;
 import org.elasticsearch.common.lucene.MinimumScoreCollector;
 import org.elasticsearch.common.lucene.search.FilteredCollector;
+import org.elasticsearch.common.lucene.search.UnlimitCollector;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.index.shard.ShardId;
 import org.elasticsearch.search.collapse.CollapseContext;
 import org.elasticsearch.search.DocValueFormat;
 import org.elasticsearch.search.SearchPhase;
@@ -62,7 +74,11 @@ import org.elasticsearch.search.rescore.RescorePhase;
 import org.elasticsearch.search.rescore.RescoreSearchContext;
 import org.elasticsearch.search.sort.SortAndFormats;
 import org.elasticsearch.search.suggest.SuggestPhase;
+import org.relsearch.DocBatch;
+import org.relsearch.DocInfo;
+import org.relsearch.QueryResultClient;
 
+import java.io.IOException;
 import java.util.AbstractList;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -78,6 +94,8 @@ public class QueryPhase implements SearchPhase {
     private final AggregationPhase aggregationPhase;
     private final SuggestPhase suggestPhase;
     private RescorePhase rescorePhase;
+
+    private static Logger logger = Logger.getLogger(QueryPhase.class);
 
     public QueryPhase(Settings settings) {
         this.aggregationPhase = new AggregationPhase();
@@ -105,19 +123,25 @@ public class QueryPhase implements SearchPhase {
         // here to make sure it happens during the QUERY phase
         aggregationPhase.preProcess(searchContext);
 
-        boolean rescore = execute(searchContext, searchContext.searcher());
-
-        if (rescore) { // only if we do a regular search
-            rescorePhase.execute(searchContext);
+        if(searchContext.relSearchParam() != null) {
+            final String IdField = "rowkey";
+            executeRel(searchContext, searchContext.searcher(), IdField);
         }
-        suggestPhase.execute(searchContext);
-        aggregationPhase.execute(searchContext);
+        else{
+            boolean rescore = execute(searchContext, searchContext.searcher());
+            if (rescore) { // only if we do a regular search
+                rescorePhase.execute(searchContext);
+            }
+            suggestPhase.execute(searchContext);
+            aggregationPhase.execute(searchContext);
 
-        if (searchContext.getProfilers() != null) {
-            ProfileShardResult shardResults = SearchProfileShardResults
+            if (searchContext.getProfilers() != null) {
+                ProfileShardResult shardResults = SearchProfileShardResults
                     .buildShardResults(searchContext.getProfilers());
-            searchContext.queryResult().profileResults(shardResults);
+                searchContext.queryResult().profileResults(shardResults);
+            }
         }
+
     }
 
     private static boolean returnsDocsInOrder(Query query, SortAndFormats sf) {
@@ -131,6 +155,145 @@ public class QueryPhase implements SearchPhase {
             return Sort.INDEXORDER.equals(sf.sort);
         }
     }
+
+    static void executeRel(SearchContext searchContext, final IndexSearcher searcher, String idField) throws QueryPhaseExecutionException {
+        //Exception ee = new Exception();
+        //ee.printStackTrace();
+        int shardId = searchContext.request().shardId().id();
+        //int num = searchContext.request().numberOfShards();
+        //System.out.println("wshlog sbsb id="+shardId+", num="+num);
+        //org.elasticsearch.bootstrap.Bootstrap;
+        logger.info("relation search! idField="+idField);
+
+        ClusterService clusterService = org.elasticsearch.bootstrap.Bootstrap.getClusterService();
+        String localNodeId = clusterService.localNode().getId();
+        ClusterState clusterState = clusterService.state();
+        RoutingTable routingTable = clusterState.routingTable();
+        String indexName = searchContext.request().shardId().getIndexName();
+        IndexRoutingTable indexRoutingTable = routingTable.index(indexName);
+        int size = indexRoutingTable.shards().size(); // use active primary shard?
+        int num = 0;
+        for(int i=0; i<size; i++){
+            IndexShardRoutingTable shards = indexRoutingTable.shard(i);
+            ShardRouting shard = shards.primaryShard();
+            String nodeId = shard.currentNodeId();
+            if(nodeId.equals(localNodeId)){
+                num += 1;
+            }
+        }
+        final int localShardNum = num;
+        //System.out.println("wshlog sbsb id="+shardId+", num="+num);
+
+
+        QuerySearchResult queryResult = searchContext.queryResult();
+        queryResult.searchTimedOut(false);
+
+        try {
+            queryResult.from(searchContext.from());
+            queryResult.size(searchContext.size());
+
+            Query query = searchContext.query();
+
+            final int totalNumDocs = searcher.getIndexReader().numDocs();
+            int numDocs = Math.min(searchContext.from() + searchContext.size(), totalNumDocs);
+            QueryResultClient remoteClient = QueryResultClient.getInstance();
+            Collector collector;
+
+
+            assert query == searcher.rewrite(query); // already rewritten
+            final UnlimitCollector unlimitCollector = new UnlimitCollector(idField, searchContext.relSearchParam(), remoteClient, indexName, shardId, localShardNum);
+            if (searchContext.size() == 0) { // no matter what the value of from is
+                final TotalHitCountCollector totalHitCountCollector = new TotalHitCountCollector();
+                collector = totalHitCountCollector;
+                if (searchContext.getProfilers() != null) {
+                    collector = new InternalProfileCollector(collector, CollectorResult.REASON_SEARCH_COUNT, Collections.emptyList());
+                }
+                //topDocsCallable = () -> new TopDocs(totalHitCountCollector.getTotalHits(), Lucene.EMPTY_SCORE_DOCS, 0);
+            } else {
+
+                if (totalNumDocs == 0) {
+                    // top collectors don't like a size of 0
+                    numDocs = 1;
+                }
+                assert numDocs > 0;
+
+                collector = unlimitCollector;
+
+            }
+
+            final boolean terminateAfterSet = searchContext.terminateAfter() != SearchContext.DEFAULT_TERMINATE_AFTER;
+
+            if (searchContext.parsedPostFilter() != null) {
+                final Collector child = collector;
+                // this will only get applied to the actual search collector and not
+                // to any scoped collectors, also, it will only be applied to the main collector
+                // since that is where the filter should only work
+                final Weight filterWeight = searcher.createNormalizedWeight(searchContext.parsedPostFilter().query(), false);
+                collector = new FilteredCollector(collector, filterWeight);
+            }
+
+            // plug in additional collectors, like aggregations
+            final List<Collector> subCollectors = new ArrayList<>();
+            subCollectors.add(collector);
+            subCollectors.addAll(searchContext.queryCollectors().values());
+
+            collector = MultiCollector.wrap(subCollectors);
+
+            try {
+                if (collector != null) {
+                    // todo use thread pool and asynch？？
+                    final Collector fCollector = collector;
+                    Runnable task = () -> {
+                        try{
+                            long t = System.currentTimeMillis();
+                            searcher.search(query, fCollector);
+                            int hitnum = 0;
+                            int totalBatchNum = 0;
+                            if(unlimitCollector != null) {
+                                unlimitCollector.sendDocs();
+                                hitnum = unlimitCollector.hitNum();
+                                totalBatchNum = unlimitCollector.totalBatchNum();
+                            }
+                            String requestId = searchContext.relSearchParam().getRequestId();
+                            int subqueryId = searchContext.relSearchParam().getSubqueryId();
+
+                            DocBatch docBatch = new DocBatch(requestId, subqueryId, indexName, shardId, localShardNum, new ArrayList<>());
+                            docBatch.setBatchNum(totalBatchNum);
+                            remoteClient.done(docBatch);
+                            t = System.currentTimeMillis() - t;
+                            logger.info("requestId:"+requestId+", index:"+indexName+", Shard:"+shardId+
+                                ", Unlimit collector task took "+t+" ms. hit number is "+hitnum);
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    };
+                    UnlimitCollector.threadPool.submit(task);
+                    //searcher.search(query, collector);
+                }
+            } catch (TimeLimitingCollector.TimeExceededException e) {
+                //assert timeoutSet : "TimeExceededException thrown even though timeout wasn't set";
+                queryResult.searchTimedOut(true);
+            } catch (Lucene.EarlyTerminationException e) {
+                assert terminateAfterSet : "EarlyTerminationException thrown even though terminateAfter wasn't set";
+                queryResult.terminatedEarly(true);
+            } finally {
+                searchContext.clearReleasables(SearchContext.Lifetime.COLLECTION);
+            }
+            if (terminateAfterSet && queryResult.terminatedEarly() == null) {
+                queryResult.terminatedEarly(false);
+            }
+
+            //System.out.println("--- --- --- >>> total handle time = "+t1);
+            Callable<TopDocs> topDocsCallable;
+            DocValueFormat[] sortValueFormats = new DocValueFormat[0];
+            topDocsCallable = () -> new TopDocs(0, Lucene.EMPTY_SCORE_DOCS, 0);
+            queryResult.topDocs(topDocsCallable.call(), sortValueFormats);
+
+        } catch (Exception e) {
+            throw new QueryPhaseExecutionException(searchContext, "Failed to execute main query", e);
+        }
+    }
+
 
     /**
      * In a package-private method so that it can be tested without having to

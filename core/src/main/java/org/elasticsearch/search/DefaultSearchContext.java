@@ -121,6 +121,10 @@ final class DefaultSearchContext extends SearchContext {
     private SliceBuilder sliceBuilder;
     private SearchTask task;
 
+    /**
+     * for rel search
+     * */
+    private RelSearchParam relSearchParam;
 
     /**
      * The original query as sent by the user without the types and aliases
@@ -181,6 +185,17 @@ final class DefaultSearchContext extends SearchContext {
         // clear and scope phase we  have
         Releasables.close(searcher, engineSearcher);
     }
+
+    @Override
+    public SearchContext relSearchParam(RelSearchParam relSearchParam) {
+        this.relSearchParam = relSearchParam;
+        return this;
+    }
+    @Override
+    public RelSearchParam relSearchParam() {
+        return this.relSearchParam;
+    }
+
 
     /**
      * Should be called before executing the main query and after all other parameters have been set.

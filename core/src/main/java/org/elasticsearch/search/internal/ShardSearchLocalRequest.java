@@ -31,6 +31,7 @@ import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryShardContext;
 import org.elasticsearch.index.shard.ShardId;
+import org.elasticsearch.search.RelSearchParam;
 import org.elasticsearch.search.Scroll;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 
@@ -72,6 +73,8 @@ public class ShardSearchLocalRequest implements ShardSearchRequest {
 
     private boolean profile;
 
+    private RelSearchParam relSearchParam;
+
     ShardSearchLocalRequest() {
     }
 
@@ -81,6 +84,7 @@ public class ShardSearchLocalRequest implements ShardSearchRequest {
                 searchRequest.source(), searchRequest.types(), searchRequest.requestCache(), aliasFilter, indexBoost);
         this.scroll = searchRequest.scroll();
         this.nowInMillis = nowInMillis;
+        this.relSearchParam = searchRequest.relSearchParam();
     }
 
     public ShardSearchLocalRequest(ShardId shardId, String[] types, long nowInMillis, AliasFilter aliasFilter) {
@@ -103,6 +107,8 @@ public class ShardSearchLocalRequest implements ShardSearchRequest {
         this.indexBoost = indexBoost;
     }
 
+    @Override
+    public RelSearchParam relSearchParam() { return relSearchParam; }
 
     @Override
     public ShardId shardId() {
@@ -197,6 +203,7 @@ public class ShardSearchLocalRequest implements ShardSearchRequest {
         }
         nowInMillis = in.readVLong();
         requestCache = in.readOptionalBoolean();
+        relSearchParam = in.readOptionalWriteable(RelSearchParam::new);
     }
 
     protected void innerWriteTo(StreamOutput out, boolean asKey) throws IOException {
@@ -216,6 +223,7 @@ public class ShardSearchLocalRequest implements ShardSearchRequest {
             out.writeVLong(nowInMillis);
         }
         out.writeOptionalBoolean(requestCache);
+        out.writeOptionalWriteable(relSearchParam);
     }
 
     @Override

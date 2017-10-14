@@ -31,6 +31,7 @@ import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryShardContext;
 import org.elasticsearch.index.shard.ShardId;
+import org.elasticsearch.search.RelSearchParam;
 import org.elasticsearch.search.Scroll;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
 import org.elasticsearch.tasks.Task;
@@ -63,6 +64,9 @@ public class ShardSearchTransportRequest extends TransportRequest implements Sha
     public void searchType(SearchType searchType) {
         shardSearchLocalRequest.setSearchType(searchType);
     }
+
+    @Override
+    public RelSearchParam relSearchParam() { return shardSearchLocalRequest.relSearchParam(); }
 
     @Override
     public String[] indices() {

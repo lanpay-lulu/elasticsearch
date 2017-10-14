@@ -38,6 +38,7 @@ import org.elasticsearch.index.fielddata.IndexFieldDataService;
 import org.elasticsearch.index.mapper.MappedFieldType;
 import org.elasticsearch.index.mapper.MapperService;
 import org.elasticsearch.index.mapper.ObjectMapper;
+import org.elasticsearch.search.RelSearchParam;
 import org.elasticsearch.search.collapse.CollapseContext;
 import org.elasticsearch.index.query.ParsedQuery;
 import org.elasticsearch.index.query.QueryShardContext;
@@ -85,6 +86,7 @@ public abstract class SearchContext extends AbstractRefCounted implements Releas
     private Map<Lifetime, List<Releasable>> clearables = null;
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private InnerHitsContext innerHitsContext;
+    private RelSearchParam relSearchParam = null;
 
     protected SearchContext() {
         super("search_context");
@@ -118,6 +120,13 @@ public abstract class SearchContext extends AbstractRefCounted implements Releas
     }
 
     protected abstract void doClose();
+
+    /**
+     * for rel search
+     * */
+    public abstract SearchContext relSearchParam(RelSearchParam relSearchParam);
+    public abstract RelSearchParam relSearchParam();
+
 
     /**
      * Should be called before executing the main query and after all other parameters have been set.

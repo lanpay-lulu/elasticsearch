@@ -33,6 +33,7 @@ import org.elasticsearch.Version;
 import org.elasticsearch.cli.ExitCodes;
 import org.elasticsearch.cli.Terminal;
 import org.elasticsearch.cli.UserException;
+import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.PidFile;
 import org.elasticsearch.common.SuppressForbidden;
 import org.elasticsearch.common.inject.CreationException;
@@ -67,13 +68,17 @@ import java.util.concurrent.CountDownLatch;
 /**
  * Internal startup code.
  */
-final class Bootstrap {
+public final class Bootstrap {
 
     private static volatile Bootstrap INSTANCE;
     private volatile Node node;
     private final CountDownLatch keepAliveLatch = new CountDownLatch(1);
     private final Thread keepAliveThread;
     private final Spawner spawner = new Spawner();
+
+    public static ClusterService getClusterService() {
+        return INSTANCE.node.injector().getInstance(ClusterService.class);
+    }
 
     /** creates a new instance */
     Bootstrap() {

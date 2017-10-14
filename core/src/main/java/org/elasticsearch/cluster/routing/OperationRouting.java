@@ -161,6 +161,9 @@ public class OperationRouting extends AbstractComponent {
                     return indexShard.preferNodeActiveInitializingShardsIt(Collections.singleton(localNodeId));
                 case PRIMARY:
                     return indexShard.primaryActiveInitializingShardIt();
+                case LOCAL_PRIMARY:
+                    logger.info("wshlog preference = "+preferenceType);
+                    return indexShard.localPrimaryShardIt(localNodeId);
                 case REPLICA:
                     return indexShard.replicaActiveInitializingShardIt();
                 case PRIMARY_FIRST:

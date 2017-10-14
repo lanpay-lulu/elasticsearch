@@ -266,6 +266,20 @@ public class IndexShardRoutingTable implements Iterable<ShardRouting> {
     }
 
     /**
+     * local primary shard It.
+     * wsh added
+     * */
+    public ShardIterator localPrimaryShardIt(String nodeId) {
+        List<ShardRouting> list = new ArrayList<>();
+        for(ShardRouting shard: primaryAsList) {
+            if(nodeId.equals(shard.currentNodeId())) {
+                list.add(shard);
+            }
+        }
+        return new PlainShardIterator(shardId, list);
+    }
+
+    /**
      * Returns an iterator only on the primary shard.
      */
     public ShardIterator primaryShardIt() {
